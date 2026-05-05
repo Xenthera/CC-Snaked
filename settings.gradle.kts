@@ -44,6 +44,7 @@ include(":forge-api")
 include(":forge")
 
 include(":lints")
+include(":python-runtime")
 include(":standalone")
 include(":web")
 

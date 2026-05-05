@@ -19,6 +19,8 @@ import dan200.computercraft.core.lua.MachineEnvironment;
 import dan200.computercraft.core.methods.LuaMethod;
 import dan200.computercraft.core.methods.MethodSupplier;
 import dan200.computercraft.core.methods.PeripheralMethod;
+import dan200.computercraft.core.runtime.LanguageRuntime;
+import dan200.computercraft.core.runtime.LanguageRuntimes;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
@@ -33,20 +35,20 @@ public final class ComputerContext {
     private final GlobalEnvironment globalEnvironment;
     private final ComputerScheduler computerScheduler;
     private final MainThreadScheduler mainThreadScheduler;
-    private final ILuaMachine.Factory luaFactory;
+    private final LanguageRuntime languageRuntime;
     private final MethodSupplier<LuaMethod> luaMethods;
     private final MethodSupplier<PeripheralMethod> peripheralMethods;
 
     private ComputerContext(
         GlobalEnvironment globalEnvironment, ComputerScheduler computerScheduler,
-        MainThreadScheduler mainThreadScheduler, ILuaMachine.Factory luaFactory,
+        MainThreadScheduler mainThreadScheduler, LanguageRuntime languageRuntime,
         MethodSupplier<LuaMethod> luaMethods,
         MethodSupplier<PeripheralMethod> peripheralMethods
     ) {
         this.globalEnvironment = globalEnvironment;
         this.computerScheduler = computerScheduler;
         this.mainThreadScheduler = mainThreadScheduler;
-        this.luaFactory = luaFactory;
+        this.languageRuntime = languageRuntime;
         this.luaMethods = luaMethods;
         this.peripheralMethods = peripheralMethods;
     }
@@ -85,7 +87,19 @@ public final class ComputerContext {
      * @return The current Lua machine factory.
      */
     public ILuaMachine.Factory luaFactory() {
-        return luaFactory;
+        return languageRuntime.machineFactory();
+    }
+
+    /**
+     * The {@link LanguageRuntime} computers in this context will boot into.
+     * <p>
+     * The runtime determines the {@linkplain ILuaMachine.Factory machine factory} as well as the ROM mount and BIOS
+     * resource used during start-up.
+     *
+     * @return The currently configured language runtime.
+     */
+    public LanguageRuntime languageRuntime() {
+        return languageRuntime;
     }
 
     /**
@@ -154,6 +168,7 @@ public final class ComputerContext {
         private @Nullable ComputerScheduler computerScheduler = null;
         private @Nullable MainThreadScheduler mainThreadScheduler;
         private ILuaMachine.@Nullable Factory luaFactory;
+        private @Nullable LanguageRuntime languageRuntime;
         private @Nullable List<GenericMethod> genericMethods;
 
         Builder(GlobalEnvironment environment) {
@@ -202,6 +217,10 @@ public final class ComputerContext {
 
         /**
          * Set the {@link ILuaMachine.Factory} for this context.
+         * <p>
+         * This is a convenience for {@link #languageRuntime(LanguageRuntime)} that wraps the given factory in the
+         * default Lua runtime via {@link LanguageRuntimes#lua(ILuaMachine.Factory)}, so the standard Lua ROM and BIOS
+         * resources continue to be used.
          *
          * @param factory The Lua machine factory.
          * @return {@code this}, for chaining
@@ -209,8 +228,32 @@ public final class ComputerContext {
          */
         public Builder luaFactory(ILuaMachine.Factory factory) {
             Objects.requireNonNull(factory);
-            if (luaFactory != null) throw new IllegalStateException("Main-thread scheduler already specified");
+            if (luaFactory != null) throw new IllegalStateException("Lua machine factory already specified");
+            if (languageRuntime != null) {
+                throw new IllegalStateException("Cannot set Lua machine factory: a language runtime has already been specified");
+            }
             luaFactory = factory;
+            return this;
+        }
+
+        /**
+         * Set the {@link LanguageRuntime} for this context.
+         * <p>
+         * The runtime determines both the {@link ILuaMachine.Factory} used to execute scripts and the ROM/BIOS
+         * resources mounted at boot. Only one of {@link #luaFactory(ILuaMachine.Factory)} or this method may be
+         * specified.
+         *
+         * @param runtime The language runtime.
+         * @return {@code this}, for chaining
+         * @see ComputerContext#languageRuntime()
+         */
+        public Builder languageRuntime(LanguageRuntime runtime) {
+            Objects.requireNonNull(runtime);
+            if (languageRuntime != null) throw new IllegalStateException("Language runtime already specified");
+            if (luaFactory != null) {
+                throw new IllegalStateException("Cannot set language runtime: a Lua machine factory has already been specified");
+            }
+            languageRuntime = runtime;
             return this;
         }
 
@@ -235,11 +278,18 @@ public final class ComputerContext {
          * @return The newly created context.
          */
         public ComputerContext build() {
+            LanguageRuntime runtime;
+            if (languageRuntime != null) {
+                runtime = languageRuntime;
+            } else {
+                runtime = LanguageRuntimes.lua(luaFactory == null ? CobaltLuaMachine::new : luaFactory);
+            }
+
             return new ComputerContext(
                 environment,
                 computerScheduler == null ? new ComputerThread(1) : computerScheduler,
                 mainThreadScheduler == null ? new NoWorkMainThreadScheduler() : mainThreadScheduler,
-                luaFactory == null ? CobaltLuaMachine::new : luaFactory,
+                runtime,
                 LuaMethodSupplier.create(genericMethods == null ? List.of() : genericMethods),
                 PeripheralMethodSupplier.create(genericMethods == null ? List.of() : genericMethods)
             );

@@ -81,6 +81,10 @@ dependencies {
     "includeRuntimeOnly"(libs.netty.socks)
     "includeRuntimeOnly"(libs.netty.proxy)
 
+    // Make GraalPy available on the dev runtime classpath via our shaded jar so the experimental
+    // Python runtime can boot. The artifact is intentionally not on the compile classpath.
+    runtimeOnly(project(":python-runtime", configuration = "shadowRuntimeElements"))
+
     "includeImplementation"(libs.nightConfig.core)
     "includeImplementation"(libs.nightConfig.toml)
 

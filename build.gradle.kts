@@ -89,28 +89,31 @@ idea.project.settings.runConfigurations {
     }
 }
 
-// Build with the IntelliJ, rather than through Gradle. This may require setting the "Compiler Output" option in
-// "Project Structure".
-idea.project.settings.delegateActions {
-    delegateBuildRunToGradle = false
-    testRunner = ActionDelegationConfig.TestRunner.PLATFORM
-}
+val isIntelliJ = System.getProperty("idea.active") == "true" || System.getProperty("idea.version") != null
+if (isIntelliJ) {
+    // Build with IntelliJ, rather than through Gradle. This may require setting the "Compiler Output" option in
+    // "Project Structure".
+    idea.project.settings.delegateActions {
+        delegateBuildRunToGradle = false
+        testRunner = ActionDelegationConfig.TestRunner.PLATFORM
+    }
 
-idea.project.settings.compiler.javac {
-    // We want ErrorProne to be present when compiling via IntelliJ, as it offers some helpful warnings
-    // and errors. Loop through our source sets and find the appropriate flags.
-    moduleJavacAdditionalOptions = subprojects
-        .asSequence()
-        .map { evaluationDependsOn(it.path) }
-        .flatMap { project ->
-            val sourceSets = project.extensions.findByType(SourceSetContainer::class) ?: return@flatMap sequenceOf()
-            sourceSets.asSequence().map { sourceSet ->
-                val name = "${idea.project.name}.${project.name}.${sourceSet.name}"
-                val compile = project.tasks.named(sourceSet.compileJavaTaskName, JavaCompile::class).get()
-                name to compile.options.allCompilerArgs.joinToString(" ") { if (it.contains(" ")) "\"$it\"" else it }
+    idea.project.settings.compiler.javac {
+        // We want ErrorProne to be present when compiling via IntelliJ, as it offers some helpful warnings
+        // and errors. Loop through our source sets and find the appropriate flags.
+        moduleJavacAdditionalOptions = subprojects
+            .asSequence()
+            .map { evaluationDependsOn(it.path) }
+            .flatMap { project ->
+                val sourceSets = project.extensions.findByType(SourceSetContainer::class) ?: return@flatMap sequenceOf()
+                sourceSets.asSequence().map { sourceSet ->
+                    val name = "${idea.project.name}.${project.name}.${sourceSet.name}"
+                    val compile = project.tasks.named(sourceSet.compileJavaTaskName, JavaCompile::class).get()
+                    name to compile.options.allCompilerArgs.joinToString(" ") { if (it.contains(" ")) "\"$it\"" else it }
+                }
             }
-        }
-        .toMap()
+            .toMap()
+    }
 }
 
 repositories() {

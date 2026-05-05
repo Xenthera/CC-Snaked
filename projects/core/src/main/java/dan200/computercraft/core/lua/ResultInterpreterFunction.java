@@ -34,14 +34,14 @@ class ResultInterpreterFunction extends ResumableVarArgFunction<ResultInterprete
         }
     }
 
-    private final CobaltLuaMachine machine;
+    private final CobaltScriptInterop interop;
     private final LuaMethod method;
     private final Object instance;
     private final ILuaContext context;
     private final String funcName;
 
-    ResultInterpreterFunction(CobaltLuaMachine machine, LuaMethod method, Object instance, ILuaContext context, String name) {
-        this.machine = machine;
+    ResultInterpreterFunction(CobaltScriptInterop interop, LuaMethod method, Object instance, ILuaContext context, String name) {
+        this.interop = interop;
         this.method = method;
         this.instance = instance;
         this.context = context;
@@ -64,7 +64,7 @@ class ResultInterpreterFunction extends ResumableVarArgFunction<ResultInterprete
         }
 
         var callback = results.getCallback();
-        var ret = machine.toValues(results.getResult());
+        var ret = interop.toValues(results.getResult());
 
         if (callback == null) return ret;
 
@@ -75,7 +75,7 @@ class ResultInterpreterFunction extends ResumableVarArgFunction<ResultInterprete
     @Override
     public Varargs resume(LuaState state, Container container, Varargs args) throws LuaError, UnwindThrowable {
         MethodResult results;
-        var arguments = CobaltLuaMachine.toObjects(args);
+        var arguments = interop.toObjects(args);
         try {
             results = container.callback.resume(arguments);
         } catch (LuaException e) {
@@ -85,7 +85,7 @@ class ResultInterpreterFunction extends ResumableVarArgFunction<ResultInterprete
             throw new LuaError("Java Exception Thrown: " + t, 0);
         }
 
-        var ret = machine.toValues(results.getResult());
+        var ret = interop.toValues(results.getResult());
 
         var callback = results.getCallback();
         if (callback == null) return ret;

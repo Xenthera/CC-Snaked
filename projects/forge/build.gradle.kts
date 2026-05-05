@@ -160,6 +160,11 @@ dependencies {
     jarJar(libs.netty.socks)
     jarJar(libs.netty.proxy)
 
+    // Provide GraalPy for the experimental Python runtime on NeoForge's runtime classpath.
+    // We avoid using the shaded uber-jar here, as Truffle relies on multi-release metadata.
+    runtimeOnly(libs.graalvmPolyglot)
+    runtimeOnly(libs.graalpyPythonEmbedding)
+
     testFixturesApi(libs.bundles.test)
     testFixturesApi(libs.bundles.kotlin)
 

@@ -16,6 +16,8 @@ import dan200.computercraft.core.lua.CobaltLuaMachine;
 import dan200.computercraft.core.lua.ILuaMachine;
 import dan200.computercraft.core.methods.MethodSupplier;
 import dan200.computercraft.core.methods.PeripheralMethod;
+import dan200.computercraft.core.python.PythonMachine;
+import dan200.computercraft.core.runtime.LanguageRuntimes;
 import dan200.computercraft.impl.AbstractComputerCraftAPI;
 import dan200.computercraft.impl.GenericSources;
 import dan200.computercraft.shared.CommonHooks;
@@ -69,10 +71,12 @@ public final class ServerContext {
         this.server = server;
         storageDir = server.getWorldPath(FOLDER);
         mainThread = new MainThread(mainThreadConfig);
+        // Temporary: hard-switch all computers to the experimental Python runtime so we can
+        // bring up an end-to-end "hello world" while we build out language selection.
         context = ComputerContext.builder(new Environment(server))
             .computerThreads(ConfigSpec.computerThreads.get())
             .mainThreadScheduler(mainThread)
-            .luaFactory(luaMachine)
+            .languageRuntime(LanguageRuntimes.python(PythonMachine::new))
             .genericMethods(GenericSources.getAllMethods(server))
             .build();
         idAssigner = new IDAssigner(storageDir.resolve("ids.json"));

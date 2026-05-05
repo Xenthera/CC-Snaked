@@ -21,6 +21,7 @@ import dan200.computercraft.core.lua.MachineException;
 import dan200.computercraft.core.methods.LuaMethod;
 import dan200.computercraft.core.methods.MethodSupplier;
 import dan200.computercraft.core.metrics.MetricsObserver;
+import dan200.computercraft.core.runtime.LanguageRuntime;
 import dan200.computercraft.core.util.Colour;
 import dan200.computercraft.core.util.Nullability;
 import org.jspecify.annotations.Nullable;
@@ -141,7 +142,7 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
 
     private @Nullable WritableMount rootMount;
 
-    private final ILuaMachine.Factory luaFactory;
+    private final LanguageRuntime languageRuntime;
 
     private final ComputerScheduler.Executor executor;
 
@@ -149,7 +150,7 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
         this.computer = computer;
         this.computerEnvironment = computerEnvironment;
         metrics = computerEnvironment.getMetrics();
-        luaFactory = context.luaFactory();
+        languageRuntime = context.languageRuntime();
         luaMethods = context.luaMethods();
         executor = context.computerScheduler().createExecutor(this, metrics);
 
@@ -310,7 +311,7 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
 
     @Nullable
     private Mount getRomMount() {
-        return computer.getGlobalEnvironment().createResourceMount("computercraft", "lua/rom");
+        return languageRuntime.mountRom(computer.getGlobalEnvironment());
     }
 
     @Nullable
@@ -353,7 +354,7 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
         // Load the bios resource
         InputStream biosStream = null;
         try {
-            biosStream = computer.getGlobalEnvironment().createResourceFile("computercraft", "lua/bios.lua");
+            biosStream = languageRuntime.openBios(computer.getGlobalEnvironment());
         } catch (Exception e) {
             LOG.error("Failed to load BIOS", e);
         }
@@ -365,7 +366,7 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
 
         // Create the lua machine
         try (var bios = biosStream) {
-            return luaFactory.create(new MachineEnvironment(
+            return languageRuntime.machineFactory().create(new MachineEnvironment(
                 new LuaContext(computer), metrics, executor.timeoutState(),
                 () -> apis.stream().map(ApiWrapper::api).iterator(),
                 luaMethods,

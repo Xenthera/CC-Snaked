@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.netty.socks)
     implementation(libs.netty.proxy)
     implementation(libs.slf4j)
+    compileOnly(libs.graalvmPolyglot)
 
     testFixturesImplementation(libs.slf4j)
     testFixturesApi(platform(libs.kotlin.platform))
@@ -33,6 +34,8 @@ dependencies {
     testFixturesApi(libs.bundles.kotlin)
 
     testImplementation(libs.asm)
+    testImplementation(libs.graalvmPolyglot)
+    testImplementation(libs.graalpyPythonEmbedding)
     testImplementation(libs.bundles.test)
     testRuntimeOnly(libs.bundles.testRuntime)
     testRuntimeOnly(libs.slf4j.simple)
@@ -49,6 +52,14 @@ tasks.processResources {
 
 tasks.test {
     systemProperty("cct.test-files", layout.buildDirectory.dir("tmp/testFiles").getAbsolutePath())
+}
+
+tasks.register<JavaExec>("runGraalPySpike") {
+    group = "verification"
+    description = "Run the GraalPy embedding spike (manual verification)."
+
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("dan200.computercraft.core.graalpy.GraalPyCoroutineSpike")
 }
 
 val checkChangelog by tasks.registering(cc.tweaked.gradle.CheckChangelog::class) {

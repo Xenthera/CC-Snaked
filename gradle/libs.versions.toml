@@ -30,6 +30,7 @@ jspecify = "1.0.0"
 kotlin = "2.3.20"
 kotlin-coroutines = "1.10.2"
 nightConfig = "3.8.3"
+graalpy = "25.0.2"
 
 # Minecraft mods
 fabricPermissions = "0.3.3"
@@ -94,6 +95,8 @@ netty-socks = { module = "io.netty:netty-codec-socks", version.ref = "netty" }
 nightConfig-core = { module = "com.electronwill.night-config:core", version.ref = "nightConfig" }
 nightConfig-toml = { module = "com.electronwill.night-config:toml", version.ref = "nightConfig" }
 slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+graalvmPolyglot = { module = "org.graalvm.polyglot:polyglot", version.ref = "graalpy" }
+graalpyPythonEmbedding = { module = "org.graalvm.python:python-embedding", version.ref = "graalpy" }
 
 # Minecraft mods
 create-fabric = { module = "com.simibubi.create:create-fabric-1.20.1", version.ref = "create-fabric" }
@@ -164,6 +167,7 @@ vanillaExtract = { module = "cc.tweaked.vanilla-extract:plugin", version.ref = "
 githubRelease = { id = "com.github.breadmoirai.github-release", version.ref = "githubRelease" }
 gradleVersions = { id = "com.github.ben-manes.versions", version.ref = "gradleVersions" }
 kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 versionCatalogUpdate = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogUpdate" }
 
 [bundles]
