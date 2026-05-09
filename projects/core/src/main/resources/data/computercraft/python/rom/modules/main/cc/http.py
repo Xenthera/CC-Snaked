@@ -1,7 +1,7 @@
 """ComputerCraft HTTP for Python (mirrors ``rom/apis/http/http.lua``).
 
-Uses the host bridge (``cct.httpRequest``, …), not Python's stdlib ``http`` /
-``socket`` modules (those are blocked by the sandbox).
+Uses the host bridge (``cct.httpRequest``, …). Stdlib ``import http`` is rejected in
+favour of ``import cc.http`` (same basename as GraalPy's HTTP package).
 """
 
 from cc.expect import expect, field

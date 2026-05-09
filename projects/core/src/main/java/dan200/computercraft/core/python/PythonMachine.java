@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class PythonMachine implements ILuaMachine {
     private static final Logger LOG = LoggerFactory.getLogger(PythonMachine.class);
 
-    private static final String BOOTSTRAP = """
+    private static final String BOOTSTRAP_CORE = """
         import importlib.abc
         import importlib.machinery
         import sys
@@ -107,9 +107,12 @@ public final class PythonMachine implements ILuaMachine {
                     is_package=is_package,
                 )
 
-        # ROM (``cc``, ``rom``) before host/builtin importers.
+        # ROM (``cc``, ``rom``) before GraalPy importers; stdlib shadow rules are applied from
+        # Java policy (see PythonImportPolicy) after this block.
         sys.meta_path.insert(0, _CctRomFinder())
         """;
+
+    private static final String BOOTSTRAP = BOOTSTRAP_CORE + PythonImportPolicy.shadowImportEnforcementPython();
 
     private final TimeoutState timeout;
     private final Runnable timeoutListener = this::onTimeoutChanged;
@@ -128,15 +131,16 @@ public final class PythonMachine implements ILuaMachine {
     public PythonMachine(MachineEnvironment environment, InputStream bios) throws IOException, MachineException {
         timeout = environment.timeout();
 
-        context = Context.newBuilder("python")
+        var contextBuilder = Context.newBuilder("python")
             // Only methods explicitly marked with @HostAccess.Export are reachable from Python.
             .allowHostAccess(HostAccess.EXPLICIT)
             .allowIO(IOAccess.NONE)
             .allowNativeAccess(false)
             .allowCreateProcess(false)
             .allowEnvironmentAccess(EnvironmentAccess.NONE)
-            .allowPolyglotAccess(PolyglotAccess.NONE)
-            .build();
+            .allowPolyglotAccess(PolyglotAccess.NONE);
+        PythonImportPolicy.applyContextOptions(contextBuilder);
+        context = contextBuilder.build();
         bindings = context.getBindings("python");
 
         // The ROM loader and host bridge must be bound before BOOTSTRAP installs the meta-path

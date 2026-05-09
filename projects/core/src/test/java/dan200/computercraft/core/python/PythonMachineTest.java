@@ -12,6 +12,7 @@ import dan200.computercraft.core.computer.TimeoutState;
 import dan200.computercraft.core.lua.MachineEnvironment;
 import dan200.computercraft.core.metrics.MetricsObserver;
 import dan200.computercraft.core.terminal.Terminal;
+import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -396,6 +397,34 @@ class PythonMachineTest {
 
         var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
         machine.close();
+    }
+
+    @Test
+    void shadowedStdlibHttpRejectedAtBoot() {
+        var timeout = new TestTimeoutState();
+        ILuaContext context = task -> {
+            throw new UnsupportedOperationException("No main-thread tasks in this test");
+        };
+
+        var env = new MachineEnvironment(
+            context,
+            MetricsObserver.discard(),
+            timeout,
+            List.of(),
+            LuaMethodSupplier.create(List.of()),
+            "CC (test)"
+        );
+
+        var bios = """
+            import http
+
+            async def main():
+                while True:
+                    yield None
+            """;
+
+        assertThrows(PolyglotException.class, () ->
+            new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test
