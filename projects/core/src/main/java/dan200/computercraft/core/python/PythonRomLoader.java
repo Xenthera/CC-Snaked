@@ -28,7 +28,7 @@ public final class PythonRomLoader {
     private static final String CC_ROOT = "cc";
     private static final String ROM_ROOT = "rom";
 
-    private static final String CC_RESOURCE_ROOT = "data/computercraft/python/rom/modules/";
+    private static final String CC_RESOURCE_ROOT = "data/computercraft/python/rom/modules/main/";
     private static final String ROM_RESOURCE_ROOT = "data/computercraft/python/rom/";
 
     @HostAccess.Export

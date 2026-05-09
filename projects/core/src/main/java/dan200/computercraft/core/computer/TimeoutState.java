@@ -107,7 +107,9 @@ public abstract class TimeoutState {
 
     @GuardedBy("this")
     protected final void updateListeners() {
-        for (var listener : listeners) listener.run();
+        // Listeners may remove themselves (or each other) when fired, which would otherwise throw a
+        // ConcurrentModificationException when iterating an ArrayList.
+        for (var listener : List.copyOf(listeners)) listener.run();
     }
 
     public final synchronized void addListener(Runnable listener) {

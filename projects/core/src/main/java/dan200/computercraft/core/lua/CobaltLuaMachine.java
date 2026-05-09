@@ -148,6 +148,12 @@ public class CobaltLuaMachine implements ILuaMachine {
     }
 
     @Override
+    public void interruptGuestExecution() {
+        if (isDisposed) return;
+        state.interrupt();
+    }
+
+    @Override
     public void close() {
         isDisposed = true;
         state.interrupt();

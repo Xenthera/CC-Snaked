@@ -11,9 +11,12 @@ import dan200.computercraft.core.lua.MachineEnvironment;
 import dan200.computercraft.core.lua.MachineException;
 import dan200.computercraft.core.lua.MachineResult;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.EnvironmentAccess;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.IOAccess;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A minimal embedded Python runtime backed by GraalPy.
@@ -45,12 +49,25 @@ public final class PythonMachine implements ILuaMachine {
                 event = yield self.filter
                 return event
 
+        # Track whether we've primed each coroutine. Python requires the first
+        # send() into a coroutine to be None, but the host may deliver an initial
+        # event on first resume.
+        try:
+            import weakref
+            __cct_started = weakref.WeakKeyDictionary()
+        except Exception:
+            __cct_started = {}
+
         def __cct_start(coro):
+            __cct_started[coro] = True
             return coro.send(None)
 
         def __cct_resume(coro, event_name, *args):
             payload = (event_name, *args)
             try:
+                if not __cct_started.get(coro, False):
+                    __cct_started[coro] = True
+                    coro.send(None)
                 return coro.send(payload)
             except StopIteration as e:
                 return ("__cct_done__", e.value)
@@ -90,7 +107,7 @@ public final class PythonMachine implements ILuaMachine {
                     is_package=is_package,
                 )
 
-        # Insert at the front so ROM modules win over any host-side stdlib shadowing.
+        # ROM (``cc``, ``rom``) before host/builtin importers.
         sys.meta_path.insert(0, _CctRomFinder())
         """;
 
@@ -106,12 +123,19 @@ public final class PythonMachine implements ILuaMachine {
     private volatile boolean disposed;
     private @Nullable String eventFilter;
 
+    private final AtomicBoolean userInterruptRequested = new AtomicBoolean(false);
+
     public PythonMachine(MachineEnvironment environment, InputStream bios) throws IOException, MachineException {
         timeout = environment.timeout();
 
         context = Context.newBuilder("python")
             // Only methods explicitly marked with @HostAccess.Export are reachable from Python.
             .allowHostAccess(HostAccess.EXPLICIT)
+            .allowIO(IOAccess.NONE)
+            .allowNativeAccess(false)
+            .allowCreateProcess(false)
+            .allowEnvironmentAccess(EnvironmentAccess.NONE)
+            .allowPolyglotAccess(PolyglotAccess.NONE)
             .build();
         bindings = context.getBindings("python");
 
@@ -119,7 +143,7 @@ public final class PythonMachine implements ILuaMachine {
         // finder, since that finder closes over ``cct``/``__cct_rom`` lexically and the BIOS may
         // trigger ``cc.*`` imports immediately.
         bindings.putMember("_cct_rom", new PythonRomLoader());
-        bindings.putMember("cct", new PythonHostBridge(environment.apis()));
+        bindings.putMember("cct", new PythonHostBridge(environment.apis(), timeout, userInterruptRequested));
 
         context.eval("python", BOOTSTRAP);
         startFn = bindings.getMember("__cct_start");
@@ -135,11 +159,24 @@ public final class PythonMachine implements ILuaMachine {
         timeout.addListener(timeoutListener);
     }
 
+    /**
+     * Mirror {@link dan200.computercraft.core.lua.CobaltLuaMachine#updateTimeout()}: wake in-flight guest execution so
+     * tight loops observe {@linkplain TimeoutState#isSoftAborted() soft abort} and {@linkplain TimeoutState#isPaused()
+     * pause}; hard abort tears down the context.
+     */
     private void onTimeoutChanged() {
         if (disposed) return;
         if (timeout.isHardAborted()) {
             close();
+            return;
         }
+        // Soft abort is handled inside guest code via a trace hook calling cct.timeoutIsSoftAborted().
+    }
+
+    @Override
+    public void interruptGuestExecution() {
+        if (disposed) return;
+        userInterruptRequested.set(true);
     }
 
     @Override
@@ -149,10 +186,6 @@ public final class PythonMachine implements ILuaMachine {
         if (timeout.isHardAborted()) {
             close();
             return MachineResult.TIMEOUT;
-        }
-        if (timeout.isSoftAborted()) {
-            close();
-            return MachineResult.error(TimeoutState.ABORT_MESSAGE);
         }
         if (timeout.isPaused()) return MachineResult.PAUSE;
 
@@ -186,6 +219,11 @@ public final class PythonMachine implements ILuaMachine {
             return MachineResult.OK;
         } catch (PolyglotException e) {
             close();
+            if (e.isInterrupted()) {
+                // We don't currently use host-side interrupts for soft abort/user terminate. If we do end up here,
+                // prefer a safe, Lua-like message.
+                return MachineResult.error("Terminated");
+            }
             LOG.warn(Logging.VM_ERROR, "Top level Python coroutine errored: {}", e.getMessage());
             return MachineResult.error(String.valueOf(e.getMessage()));
         } catch (Exception e) {

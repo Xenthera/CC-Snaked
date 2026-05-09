@@ -279,6 +279,11 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
 
             eventQueue.offer(new Event(event, args));
         }
+        if ("terminate".equals(event)) {
+            // Ensure tight loops can observe Ctrl+T even without yielding.
+            var activeMachine = machine;
+            if (activeMachine != null) activeMachine.interruptGuestExecution();
+        }
         enqueue();
     }
 
@@ -551,7 +556,9 @@ final class ComputerExecutor implements ComputerScheduler.Worker {
     private void resumeMachine(@Nullable String event, @Nullable Object @Nullable [] args) throws InterruptedException {
         var result = Nullability.assertNonNull(machine).handleEvent(event, args);
         if (result.isError()) {
-            displayFailure("Error running computer", result.getMessage());
+            var message = result.getMessage();
+
+            displayFailure("Error running computer", message);
             shutdown();
         } else if (result.isPause()) {
             wasPaused = true;

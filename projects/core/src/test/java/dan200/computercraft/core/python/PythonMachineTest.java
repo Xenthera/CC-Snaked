@@ -137,12 +137,20 @@ class PythonMachineTest {
             "CC (test)"
         );
 
-        // Importing the shell should succeed via the ROM importer. We then exit immediately.
+        // Importing the shell should succeed via the ROM importer. We then park in an event
+        // loop instead of returning, since a returning BIOS coroutine is treated as an error.
         var bios = """
-            from rom.programs import shell
+            from rom.programs import shell as _shell
+            from cc import os as ccos
+
+            assert callable(_shell.run), "rom.programs.shell did not expose run()"
 
             async def main():
-                await shell.run(["exit"])
+                while True:
+                    try:
+                        await ccos.pull_event()
+                    except ccos.Terminated:
+                        return
             """;
 
         var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
@@ -274,6 +282,151 @@ class PythonMachineTest {
         var line = terminal.getLine(0).toString();
         assertEquals("Hello", line.substring(0, 5));
 
+        machine.close();
+    }
+
+    @Test
+    void canImportNewRomCcModules() throws Exception {
+        // Verifies that the literal-layout migration (cc.* under rom/modules/main/cc/) keeps
+        // ``cc.expect``, ``cc.strings``, ``cc.completion``, and ``cc.shell.completion``
+        // resolvable through the meta-path importer.
+        var timeout = new TestTimeoutState();
+        ILuaContext context = task -> {
+            throw new UnsupportedOperationException("No main-thread tasks in this test");
+        };
+
+        var env = new MachineEnvironment(
+            context,
+            MetricsObserver.discard(),
+            timeout,
+            List.of(),
+            LuaMethodSupplier.create(List.of()),
+            "CC (test)"
+        );
+
+        var bios = """
+            from cc import expect as ccexpect
+            from cc import help as cchelp
+            from cc import strings as ccstrings
+            from cc import completion as cccompletion
+            from cc.shell import completion as shellcompletion
+
+            assert ccexpect.expect(1, "hi", "string") == "hi"
+            cchelp.set_path("/rom/help")
+            assert cchelp.get_path() == "/rom/help"
+            assert ccstrings.ensure_width("ab", 4) == "ab  "
+            assert cccompletion.choice("h", ["help", "history"]) == ["elp", "istory"]
+            assert callable(shellcompletion.build)
+
+            async def main():
+                while True:
+                    pass
+                    yield None
+            """;
+
+        var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
+        // The asserts above ran at module-load time. If anything failed, the constructor would
+        // have thrown a MachineException already.
+        machine.close();
+    }
+
+    @Test
+    void shellTokeniseMatchesLuaSemantics() throws Exception {
+        // Verifies the cc.shell.tokenise port matches Lua's quote/whitespace handling.
+        var timeout = new TestTimeoutState();
+        ILuaContext context = task -> {
+            throw new UnsupportedOperationException("No main-thread tasks in this test");
+        };
+
+        var env = new MachineEnvironment(
+            context,
+            MetricsObserver.discard(),
+            timeout,
+            List.of(),
+            LuaMethodSupplier.create(List.of()),
+            "CC (test)"
+        );
+
+        var bios = """
+            from cc import shell as ccshell
+
+            assert ccshell.tokenise("a b c") == ["a", "b", "c"], "whitespace split"
+            assert ccshell.tokenise('a "b c" d') == ["a", "b c", "d"], "quoted segment"
+            assert ccshell.tokenise("") == [], "empty"
+
+            async def main():
+                while True:
+                    pass
+                    yield None
+            """;
+
+        var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
+        machine.close();
+    }
+
+    @Test
+    void pythonSettingsDefaultsMatchLuaBios() throws Exception {
+        var timeout = new TestTimeoutState();
+        ILuaContext context = task -> {
+            throw new UnsupportedOperationException("No main-thread tasks in this test");
+        };
+
+        var env = new MachineEnvironment(
+            context,
+            MetricsObserver.discard(),
+            timeout,
+            List.of(),
+            LuaMethodSupplier.create(List.of()),
+            "CC (test)"
+        );
+
+        var bios = """
+            from cc import settings as ccsettings
+
+            assert ccsettings.get("shell.autocomplete") is True
+            assert ccsettings.get("shell.autocomplete_hidden") is False
+            assert ccsettings.get("motd.enable") is True
+            assert ccsettings.get("list.show_hidden") is False
+
+            async def main():
+                while True:
+                    pass
+                    yield None
+            """;
+
+        var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
+        machine.close();
+    }
+
+    @Test
+    void canImportRomStartup() throws Exception {
+        // Verifies the startup module loads through the rom.* importer.
+        var timeout = new TestTimeoutState();
+        ILuaContext context = task -> {
+            throw new UnsupportedOperationException("No main-thread tasks in this test");
+        };
+
+        var env = new MachineEnvironment(
+            context,
+            MetricsObserver.discard(),
+            timeout,
+            List.of(),
+            LuaMethodSupplier.create(List.of()),
+            "CC (test)"
+        );
+
+        var bios = """
+            from rom import startup
+
+            assert callable(startup.run), "rom.startup must expose run()"
+
+            async def main():
+                while True:
+                    pass
+                    yield None
+            """;
+
+        var machine = new PythonMachine(env, new ByteArrayInputStream(bios.getBytes(StandardCharsets.UTF_8)));
         machine.close();
     }
 

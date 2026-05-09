@@ -13,6 +13,22 @@ class Terminated(Exception):
     """Raised by :func:`pull_event` when a ``terminate`` event is dispatched."""
 
 
+def is_terminated(exc):
+    """True if ``exc`` is a Ctrl+T / ``terminate`` stop (including Graal duplicate types)."""
+    if isinstance(exc, Terminated):
+        return True
+    try:
+        if type(exc).__name__ == "Terminated":
+            return True
+    except Exception:
+        pass
+    try:
+        s = str(exc)
+    except Exception:
+        return False
+    return s in ("Terminated", "Terminated: Terminated")
+
+
 class _AwaitEvent:
     # The host scheduler advances the BIOS coroutine by sending event tuples back
     # in. Yielding the desired filter (or ``None``) lets the host decide whether
@@ -22,6 +38,7 @@ class _AwaitEvent:
 
     def __await__(self):
         return (yield self._filter)
+
 
 def _as_event_tuple(value):
     if value is None:
@@ -54,17 +71,32 @@ def cancel_timer(token):
     cct.osCancelTimer(int(token))
 
 
+def shutdown():
+    cct.osShutdown()
+
+
+def reboot():
+    cct.osReboot()
+
+
+def version():
+    """CraftOS version string. Matches Lua ``bios.lua`` / ``os.version()``."""
+    return "CraftOS 1.9 (Python)"
+
+
 async def sleep(seconds):
-    """Block the calling coroutine for at least ``seconds`` seconds."""
+    """Block the calling coroutine for at least ``seconds`` seconds.
+
+    Uses :func:`pull_event` with a ``timer`` filter (same idea as Lua ``os.sleep`` calling
+    ``os.pullEvent``), so ``terminate`` raises :class:`Terminated` instead of spinning.
+    """
     token = start_timer(float(seconds or 0))
     while True:
-        event = _as_event_tuple(await _AwaitEvent("timer"))
+        event = _as_event_tuple(await pull_event("timer"))
         if len(event) >= 2 and event[1] == token:
             return
 
 
 def queue_event(name, *args):
-    # TODO(python-runtime): wire through to OSAPI.queueEvent once we have a
-    # non-Lua-bound entry point. The Lua-bound overload needs an IArguments
-    # wrapper which we deliberately don't expose to the host bridge yet.
-    raise NotImplementedError("os.queue_event is not wired yet")
+    """Queue an event for :func:`pull_event` / :func:`pull_event_raw` (Lua ``os.queueEvent``)."""
+    cct.osQueueEvent(str(name), *args)

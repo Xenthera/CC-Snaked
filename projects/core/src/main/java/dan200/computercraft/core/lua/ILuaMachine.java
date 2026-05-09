@@ -45,6 +45,15 @@ public interface ILuaMachine {
      */
     void close();
 
+    /**
+     * Ask the guest runtime to stop running code as soon as possible (for example when the user presses Ctrl+T or the
+     * computer must shut down while guest code is in a tight loop without yielding).
+     * <p>
+     * Default: no-op (embeddings that run fully synchronously on the computer thread may ignore this).
+     */
+    default void interruptGuestExecution() {
+    }
+
     interface Factory {
         /**
          * Attempt to create a Lua machine.

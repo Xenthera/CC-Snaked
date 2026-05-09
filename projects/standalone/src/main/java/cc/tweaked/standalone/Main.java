@@ -15,6 +15,8 @@ import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.filesystem.FileMount;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.filesystem.WritableFileMount;
+import dan200.computercraft.core.python.PythonMachine;
+import dan200.computercraft.core.runtime.LanguageRuntimes;
 import dan200.computercraft.core.terminal.Terminal;
 import dan200.computercraft.core.terminal.TextBuffer;
 import dan200.computercraft.core.util.Colour;
@@ -171,7 +173,10 @@ public class Main {
             CoreConfig.httpRules = List.of(AddressRule.parse("*", OptionalInt.empty(), Action.ALLOW.toPartial()));
         }
 
-        var context = ComputerContext.builder(new StandaloneGlobalEnvironment(resourcesDirectory)).build();
+        // Match current experimental behaviour in-game: boot computers into the Python runtime.
+        var context = ComputerContext.builder(new StandaloneGlobalEnvironment(resourcesDirectory))
+            .languageRuntime(LanguageRuntimes.python(PythonMachine::new))
+            .build();
         try (var gl = new GLObjects()) {
             var isDirty = new AtomicBoolean(true);
             var computer = new Computer(

@@ -33,6 +33,9 @@ dependencies {
     implementation(libs.commonsCli)
     implementation(libs.slf4j)
     runtimeOnly(libs.slf4j.simple)
+    // Needed when booting the experimental Python runtime from :standalone.
+    runtimeOnly(libs.graalvmPolyglot)
+    runtimeOnly(libs.graalpyPythonEmbedding)
 
     implementation(platform(libs.lwjgl.bom))
     implementation(libs.lwjgl.core)
